@@ -1,0 +1,100 @@
+Sub MergeToEmailWithFromAddress()
+    Dim strFromAddress As String
+    Dim strSubjectLine As String
+    Dim olApp As Object ' Late binding for Outlook.Application
+    Dim olNamespace As Object ' Late binding for Outlook.Namespace
+    Dim olMailItem As Object ' Late binding for Outlook.MailItem
+    Dim olAccount As Object ' Late binding for Outlook.Account
+    Dim mm As MailMerge
+    Dim i As Integer
+    Dim dataSource As MailMergeDataSource
+    Dim accountList As String
+    Dim accountChoice As String
+    Dim accounts As Object
+    Dim selectedAccount As Object
+    Dim emailBody As String
+    Dim docContent As String
+    
+    ' Initialize Outlook Application
+    Set olApp = CreateObject("Outlook.Application")
+    Set olNamespace = olApp.GetNamespace("MAPI")
+    
+    ' Get a list of available Outlook accounts
+    Set accounts = olNamespace.accounts
+    accountList = ""
+    For Each olAccount In accounts
+        accountList = accountList & olAccount.SmtpAddress & vbCrLf
+    Next olAccount
+    
+    ' Prompt user to select the 'From' account from available accounts
+    accountChoice = InputBox("Select one of the following accounts for the 'From' address:" & vbCrLf & vbCrLf & accountList, "Select From Account")
+    
+    ' Validate input for account choice
+    If accountChoice = "" Then
+        MsgBox "You must select a valid account.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Validate if selected account exists
+    Set selectedAccount = Nothing
+    For Each olAccount In accounts
+        If olAccount.SmtpAddress = accountChoice Then
+            Set selectedAccount = olAccount
+            Exit For
+        End If
+    Next olAccount
+    
+    ' Check if a valid account was selected
+    If selectedAccount Is Nothing Then
+        MsgBox "The account you entered does not exist. Please try again.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Prompt user for the subject line
+    strSubjectLine = InputBox("Enter the subject line for the emails:", "Mail Merge - Subject Line")
+    
+    ' Validate input for subject line
+    If strSubjectLine = "" Then
+        MsgBox "Subject line is required.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Access the mail merge data source
+    Set mm = ActiveDocument.MailMerge
+    Set dataSource = mm.dataSource
+    
+    ' Ensure the document is set up as a mail merge
+    If mm.MainDocumentType = wdNotAMergeDocument Then
+        MsgBox "This document is not set up for mail merge.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Get the full content of the active document for email body
+    docContent = ActiveDocument.Content.Text
+    
+    ' Loop through each record in the mail merge data source
+    For i = 1 To dataSource.RecordCount
+        dataSource.ActiveRecord = i ' Move to the current record
+        
+        ' Create a new email
+        Set olMailItem = olApp.CreateItem(0) ' 0 refers to Outlook.MailItem type for late binding
+        
+        ' Set the account to send from the selected account
+        Set olMailItem.SendUsingAccount = selectedAccount
+        
+        ' Set the recipient from the mail merge data source
+        olMailItem.To = dataSource.DataFields("Email").Value
+        olMailItem.Subject = strSubjectLine
+        
+        ' Set the dynamic body content without using placeholders
+        emailBody = docContent
+        
+        ' Set the body of the email
+        olMailItem.Body = emailBody
+        
+        ' Send the email
+        olMailItem.Send
+    Next i
+    
+    MsgBox "Mail merge completed and emails sent using account: " & accountChoice, vbInformation
+End Sub
